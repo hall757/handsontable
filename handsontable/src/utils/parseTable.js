@@ -25,49 +25,100 @@ function isHTMLTable(element) {
  * @returns {string} OuterHTML of the HTMLTableElement.
  */
 export function instanceToHTML(instance) {
-  const hasColumnHeaders = instance.hasColHeaders();
-  const hasRowHeaders = instance.hasRowHeaders();
-  const coords = [
-    hasColumnHeaders ? -1 : 0,
-    hasRowHeaders ? -1 : 0,
-    instance.countRows() - 1,
-    instance.countCols() - 1,
+  const includeRowHeaders = instance.hasRowHeaders();
+  const includeColumnHeaders = instance.hasColHeaders();
+  const startRow = includeColumnHeaders ? -1 : 0;
+  const startColumn = includeRowHeaders ? -1 : 0;
+  const endRow = instance.countRows() - 1;
+  const endColumn = instance.countCols() - 1;
+
+  return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, includeRowHeaders, includeColumnHeaders);
+}
+
+/**
+ * Converts Handsontable's selection into HTMLTableElement.
+ *
+ * @param {Core} instance The Handsontable instance.
+ * @param {boolean} withHeaders Defines whether outer HTML should include row and column headers.
+ * @returns {string} OuterHTML of the HTMLTableElement.
+ */
+export function selectionToHTML(instance, withHeaders = false) {
+  const selection = instance.getSelectedLast();
+  const [endRow, endColumn] = [
+    Math.max(selection[0], selection[2]),
+    Math.max(selection[1], selection[3]),
   ];
-  const data = instance.getData(...coords);
-  const countRows = data.length;
-  const countCols = countRows > 0 ? data[0].length : 0;
+  let [startRow, startColumn] = [
+    Math.min(selection[0], selection[2]),
+    Math.min(selection[1], selection[3]),
+  ];
+  const includeRowHeaders = withHeaders && startColumn < 0;
+  const includeColumnHeaders = withHeaders && startRow < 0;
+
+  if (withHeaders === false) {
+    startRow = Math.max(startRow, 0);
+    startColumn = Math.max(startColumn, 0);
+  }
+
+  return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, includeRowHeaders, includeColumnHeaders);
+}
+
+/**
+ * Creates OuterHTML of the HTMLTableElement from instance of Handsontable basing on handled coordinates.
+ *
+ * @private
+ * @param {Core} instance The Handsontable instance.
+ * @param {number} startRow Starting row for creating a HTML table.
+ * @param {number} startColumn Starting row for creating a HTML table.
+ * @param {endRow} endRow Ending row for creating a HTML table.
+ * @param {endColumn} endColumn Ending row for creating a HTML table.
+ * @param {boolean} includeRowHeaders Defines whether row headers should be included in created HTML table.
+ * @param {boolean} includeColumnHeaders Defines whether row headers should be included in created HTML table.
+ * @returns {string}
+ */
+function getTableByCoords(instance, startRow, startColumn, endRow, endColumn, includeRowHeaders, includeColumnHeaders) {
+  const data = instance.getData(startRow, startColumn, endRow, endColumn);
+  const countRows = endRow - startRow + 1;
+  const countCols = endColumn - startColumn + 1;
   const TABLE = ['<table>', '</table>'];
-  const THEAD = hasColumnHeaders ? ['<thead>', '</thead>'] : [];
+  const THEAD = includeColumnHeaders ? ['<thead>', '</thead>'] : [];
   const TBODY = ['<tbody>', '</tbody>'];
-  const rowModifier = hasRowHeaders ? 1 : 0;
-  const columnModifier = hasColumnHeaders ? 1 : 0;
 
   for (let row = 0; row < countRows; row += 1) {
-    const isColumnHeadersRow = hasColumnHeaders && row === 0;
+    const isColumnHeadersRow = includeColumnHeaders && row === 0;
     const CELLS = [];
 
     for (let column = 0; column < countCols; column += 1) {
-      const isRowHeadersColumn = !isColumnHeadersRow && hasRowHeaders && column === 0;
+      const isRowHeadersColumn = !isColumnHeadersRow && includeRowHeaders && column === 0;
       let cell = '';
 
       if (isColumnHeadersRow) {
-        cell = `<th>${instance.getColHeader(column - rowModifier)}</th>`;
+        cell = `<th>${instance.getColHeader(startColumn + column)}</th>`;
 
       } else if (isRowHeadersColumn) {
-        cell = `<th>${instance.getRowHeader(row - columnModifier)}</th>`;
+        cell = `<th>${instance.getRowHeader(startRow + row)}</th>`;
 
       } else {
         const cellData = data[row][column];
-        const { hidden, rowspan, colspan } = instance.getCellMeta(row - columnModifier, column - rowModifier);
+        const { hidden, rowspan, colspan } =
+          instance.getCellMeta(startRow + row, startColumn + column);
 
         if (!hidden) {
           const attrs = [];
 
           if (rowspan) {
-            attrs.push(`rowspan="${rowspan}"`);
+            const recalculatedRowSpan = Math.min(rowspan, countRows - row);
+
+            if (recalculatedRowSpan > 1) {
+              attrs.push(`rowspan="${recalculatedRowSpan}"`);
+            }
           }
           if (colspan) {
-            attrs.push(`colspan="${colspan}"`);
+            const recalculatedColumnSpan = Math.min(colspan, countCols - column);
+
+            if (recalculatedColumnSpan > 1) {
+              attrs.push(`colspan="${recalculatedColumnSpan}"`);
+            }
           }
           if (isEmpty(cellData)) {
             cell = `<td ${attrs.join(' ')}></td>`;
