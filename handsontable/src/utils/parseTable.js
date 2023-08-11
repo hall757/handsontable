@@ -39,10 +39,13 @@ export function instanceToHTML(instance) {
  * Converts Handsontable's selection into HTMLTableElement.
  *
  * @param {Core} instance The Handsontable instance.
- * @param {boolean} withHeaders Defines whether outer HTML should include row and column headers.
+ * @param {boolean} withColumnHeaders Defines whether outer HTML should include column headers.
+ * @param {boolean} withRowHeaders Defines whether outer HTML should include row headers.
+ * @param {boolean} onlyFirstLevel Defines whether included headers should be limited to the nearest column headers only.
  * @returns {string} OuterHTML of the HTMLTableElement.
  */
-export function selectionToHTML(instance, withHeaders = false) {
+export function selectionToHTML(instance, withColumnHeaders = false, withRowHeaders = false,
+                                onlyFirstLevel = false) {
   const selection = instance.getSelectedLast();
   const [endRow, endColumn] = [
     Math.max(selection[0], selection[2]),
@@ -52,12 +55,21 @@ export function selectionToHTML(instance, withHeaders = false) {
     Math.min(selection[0], selection[2]),
     Math.min(selection[1], selection[3]),
   ];
-  const includeRowHeaders = withHeaders && startColumn < 0;
-  const includeColumnHeaders = withHeaders && startRow < 0;
+  const includeRowHeaders = withRowHeaders && startColumn < 0;
+  const includeColumnHeaders = withColumnHeaders && startRow < 0;
 
-  if (withHeaders === false) {
+  if (withColumnHeaders === false) {
     startRow = Math.max(startRow, 0);
+
+  } else if (onlyFirstLevel === true) {
+    startRow = Math.max(startRow, -1);
+  }
+
+  if (withRowHeaders === false) {
     startColumn = Math.max(startColumn, 0);
+
+  } else if (onlyFirstLevel === true) {
+    startColumn = Math.max(startColumn, -1);
   }
 
   return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, includeRowHeaders, includeColumnHeaders);
@@ -70,8 +82,8 @@ export function selectionToHTML(instance, withHeaders = false) {
  * @param {Core} instance The Handsontable instance.
  * @param {number} startRow Starting row for creating a HTML table.
  * @param {number} startColumn Starting row for creating a HTML table.
- * @param {endRow} endRow Ending row for creating a HTML table.
- * @param {endColumn} endColumn Ending row for creating a HTML table.
+ * @param {number} endRow Ending row for creating a HTML table.
+ * @param {number} endColumn Ending row for creating a HTML table.
  * @param {boolean} includeRowHeaders Defines whether row headers should be included in created HTML table.
  * @param {boolean} includeColumnHeaders Defines whether row headers should be included in created HTML table.
  * @returns {string}
@@ -110,18 +122,18 @@ function getTableByCoords(instance, startRow, startColumn, endRow, endColumn, in
             const recalculatedRowSpan = Math.min(rowspan, countRows - row);
 
             if (recalculatedRowSpan > 1) {
-              attrs.push(`rowspan="${recalculatedRowSpan}"`);
+              attrs.push(` rowspan="${recalculatedRowSpan}"`);
             }
           }
           if (colspan) {
             const recalculatedColumnSpan = Math.min(colspan, countCols - column);
 
             if (recalculatedColumnSpan > 1) {
-              attrs.push(`colspan="${recalculatedColumnSpan}"`);
+              attrs.push(` colspan="${recalculatedColumnSpan}"`);
             }
           }
           if (isEmpty(cellData)) {
-            cell = `<td ${attrs.join(' ')}></td>`;
+            cell = `<td${attrs.join('')}></td>`;
           } else {
             const value = cellData.toString()
               .replace('<', '&lt;')
@@ -130,7 +142,7 @@ function getTableByCoords(instance, startRow, startColumn, endRow, endColumn, in
               .replace(/\x20/gi, '&nbsp;')
               .replace(/\t/gi, '&#9;');
 
-            cell = `<td ${attrs.join(' ')}>${value}</td>`;
+            cell = `<td${attrs.join('')}>${value}</td>`;
           }
         }
       }

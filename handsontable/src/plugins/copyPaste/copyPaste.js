@@ -15,7 +15,7 @@ import {
   CopyableRangesFactory,
   normalizeRanges,
 } from './copyableRanges';
-import { _dataToHTML, htmlToGridSettings } from '../../utils/parseTable';
+import { _dataToHTML, htmlToGridSettings, selectionToHTML } from '../../utils/parseTable';
 
 import './copyPaste.css';
 
@@ -574,7 +574,7 @@ export class CopyPaste extends BasePlugin {
       const textPlain = stringify(data);
 
       if (event && event.clipboardData) {
-        const textHTML = _dataToHTML(data, this.hot.rootDocument);
+        const textHTML = selectionToHTML(this.hot, true);
 
         event.clipboardData.setData('text/plain', textPlain);
         event.clipboardData.setData('text/html', [META_HEAD, textHTML].join(''));
