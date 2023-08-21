@@ -39,24 +39,26 @@ export function instanceToHTML(instance) {
  * Converts Handsontable's selection into HTMLTableElement.
  *
  * @param {Core} instance The Handsontable instance.
- * @param {boolean} withColumnHeaders Defines whether outer HTML should include column headers.
- * @param {boolean} withRowHeaders Defines whether outer HTML should include row headers.
- * @param {boolean} onlyFirstLevel Defines whether included headers should be limited to the nearest column headers only.
+ * @param {object} metaInfoAndModifiers
  * @returns {string} OuterHTML of the HTMLTableElement.
  */
-export function selectionToHTML(instance, withColumnHeaders = false, withRowHeaders = false,
-                                onlyFirstLevel = false) {
+export function selectionToHTML(instance, metaInfoAndModifiers) {
+  const { withCells, withColumnHeaders, withRowHeaders, onlyFirstLevel } = metaInfoAndModifiers;
+
   const selection = instance.getSelectedLast();
-  const [endRow, endColumn] = [
-    Math.max(selection[0], selection[2]),
-    Math.max(selection[1], selection[3]),
-  ];
-  let [startRow, startColumn] = [
+  const endColumn = Math.max(selection[1], selection[3]);
+  let [startRow, startColumn, endRow] = [
     Math.min(selection[0], selection[2]),
     Math.min(selection[1], selection[3]),
+    Math.max(selection[0], selection[2]),
   ];
-  const includeRowHeaders = withRowHeaders && startColumn < 0;
-  const includeColumnHeaders = withColumnHeaders && startRow < 0;
+
+  if (withCells === false) {
+    startRow = Math.min(startRow, -1);
+    endRow = Math.min(endRow, -1);
+
+    return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, withRowHeaders, true);
+  }
 
   if (withColumnHeaders === false) {
     startRow = Math.max(startRow, 0);
@@ -72,7 +74,24 @@ export function selectionToHTML(instance, withColumnHeaders = false, withRowHead
     startColumn = Math.max(startColumn, -1);
   }
 
-  return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, includeRowHeaders, includeColumnHeaders);
+  return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, withRowHeaders, withColumnHeaders);
+}
+
+/**
+ * Encode text to HTML.
+ *
+ * @param {string} text Text to prepare.
+ * @returns {string}
+ */
+function encodeHTMLEntities(text) {
+  return `${text}`.replace('<', '&lt;')
+    .replace('>', '&gt;')
+    .replace(/(<br(\s*|\/)>(\r\n|\n)?|\r\n|\n)/g, '<br>\r\n')
+    .replace(/\x20{2,}/gi, (substring) => {
+      // The way how Excel serializes data with at least two spaces.
+      return `<span style="mso-spacerun: yes">${'&nbsp;'.repeat(substring.length - 1)} </span>`;
+    })
+    .replace(/\t/gi, '&#9;');
 }
 
 /**
@@ -96,19 +115,23 @@ function getTableByCoords(instance, startRow, startColumn, endRow, endColumn, in
   const THEAD = includeColumnHeaders ? ['<thead>', '</thead>'] : [];
   const TBODY = ['<tbody>', '</tbody>'];
 
+  if (data.length === 0) {
+    return '<table></table>';
+  }
+
   for (let row = 0; row < countRows; row += 1) {
-    const isColumnHeadersRow = includeColumnHeaders && row === 0;
+    const isColumnHeadersRow = includeColumnHeaders && startRow + row < 0;
     const CELLS = [];
 
     for (let column = 0; column < countCols; column += 1) {
-      const isRowHeadersColumn = !isColumnHeadersRow && includeRowHeaders && column === 0;
+      const isRowHeadersColumn = !isColumnHeadersRow && includeRowHeaders && startColumn + column < 0;
       let cell = '';
 
       if (isColumnHeadersRow) {
-        cell = `<th>${instance.getColHeader(startColumn + column)}</th>`;
+        cell = `<th>${encodeHTMLEntities(instance.getColHeader(startColumn + column, startRow + row))}</th>`;
 
       } else if (isRowHeadersColumn) {
-        cell = `<th>${instance.getRowHeader(startRow + row)}</th>`;
+        cell = `<th>${encodeHTMLEntities(instance.getRowHeader(row))}</th>`;
 
       } else {
         const cellData = data[row][column];
@@ -135,14 +158,9 @@ function getTableByCoords(instance, startRow, startColumn, endRow, endColumn, in
           if (isEmpty(cellData)) {
             cell = `<td${attrs.join('')}></td>`;
           } else {
-            const value = cellData.toString()
-              .replace('<', '&lt;')
-              .replace('>', '&gt;')
-              .replace(/(<br(\s*|\/)>(\r\n|\n)?|\r\n|\n)/g, '<br>\r\n')
-              .replace(/\x20/gi, '&nbsp;')
-              .replace(/\t/gi, '&#9;');
+            const value = cellData.toString();
 
-            cell = `<td${attrs.join('')}>${value}</td>`;
+            cell = `<td${attrs.join('')}>${encodeHTMLEntities(value)}</td>`;
           }
         }
       }
@@ -153,7 +171,7 @@ function getTableByCoords(instance, startRow, startColumn, endRow, endColumn, in
     const TR = ['<tr>', ...CELLS, '</tr>'].join('');
 
     if (isColumnHeadersRow) {
-      THEAD.splice(1, 0, TR);
+      THEAD.splice(-1, 0, TR);
     } else {
       TBODY.splice(-1, 0, TR);
     }
@@ -186,7 +204,7 @@ export function _dataToHTML(input) {
 
     for (let column = 0; column < columnsLen; column += 1) {
       const cellData = rowData[column];
-      const parsedCellData = isEmpty(cellData) ?
+      const encodeHTMLEntitiesdCellData = isEmpty(cellData) ?
         '' :
         cellData.toString()
           .replace(/</g, '&lt;')
@@ -198,7 +216,7 @@ export function _dataToHTML(input) {
           })
           .replace(/\t/gi, '&#9;');
 
-      columnsResult.push(`<td>${parsedCellData}</td>`);
+      columnsResult.push(`<td>${encodeHTMLEntitiesdCellData}</td>`);
     }
 
     result.push('<tr>', ...columnsResult, '</tr>');

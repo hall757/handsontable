@@ -567,14 +567,26 @@ export class CopyPaste extends BasePlugin {
     this.#isTriggeredByCopy = false;
 
     const data = this.getRangedData(this.copyableRanges);
-    const copiedHeadersCount = this.#countCopiedHeaders(this.copyableRanges);
-    const allowCopying = !!this.hot.runHooks('beforeCopy', data, this.copyableRanges, copiedHeadersCount);
+    const metaInfoAndModifiers = {
+      ...this.#countCopiedHeaders(this.copyableRanges),
+      ignoredRows: [],
+      ignoredColumns: [],
+    };
+
+    const allowCopying = !!this.hot.runHooks('beforeCopy', data, this.copyableRanges, metaInfoAndModifiers);
 
     if (allowCopying) {
       const textPlain = stringify(data);
 
       if (event && event.clipboardData) {
-        const textHTML = selectionToHTML(this.hot, true);
+        const textHTML = selectionToHTML(this.hot, {
+          withCells: this.#copyMode !== 'column-headers-only',
+          ignoredRows: metaInfoAndModifiers.ignoredRows,
+          ignoredColumns: metaInfoAndModifiers.ignoredColumns,
+          withColumnHeaders: this.#copyMode !== 'cells-only',
+          withRowHeaders: false,
+          onlyFirstLevel: this.#copyMode === 'with-column-headers',
+        });
 
         event.clipboardData.setData('text/plain', textPlain);
         event.clipboardData.setData('text/html', [META_HEAD, textHTML].join(''));
@@ -583,7 +595,7 @@ export class CopyPaste extends BasePlugin {
         this.hot.rootWindow.clipboardData.setData('Text', textPlain);
       }
 
-      this.hot.runHooks('afterCopy', data, this.copyableRanges, copiedHeadersCount);
+      this.hot.runHooks('afterCopy', data, this.copyableRanges, metaInfoAndModifiers);
     }
 
     this.#copyMode = 'cells-only';
