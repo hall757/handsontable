@@ -581,11 +581,10 @@ export class CopyPaste extends BasePlugin {
       if (event && event.clipboardData) {
         const textHTML = selectionToHTML(this.hot, {
           withCells: this.#copyMode !== 'column-headers-only',
-          ignoredRows: metaInfoAndModifiers.ignoredRows,
-          ignoredColumns: metaInfoAndModifiers.ignoredColumns,
           withColumnHeaders: this.#copyMode !== 'cells-only',
           withRowHeaders: false,
           onlyFirstLevel: this.#copyMode === 'with-column-headers',
+          ...metaInfoAndModifiers
         });
 
         event.clipboardData.setData('text/plain', textPlain);

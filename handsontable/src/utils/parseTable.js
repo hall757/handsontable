@@ -1,4 +1,4 @@
-import { isEmpty } from './../helpers/mixed';
+import { isDefined, isEmpty } from './../helpers/mixed';
 
 const ESCAPED_HTML_CHARS = {
   '&nbsp;': '\x20',
@@ -43,38 +43,42 @@ export function instanceToHTML(instance) {
  * @returns {string} OuterHTML of the HTMLTableElement.
  */
 export function selectionToHTML(instance, metaInfoAndModifiers) {
-  const { withCells, withColumnHeaders, withRowHeaders, onlyFirstLevel } = metaInfoAndModifiers;
-
+  const { withCells, withColumnHeaders, withRowHeaders, onlyFirstLevel, columnHeadersCount } = metaInfoAndModifiers;
   const selection = instance.getSelectedLast();
-  const endColumn = Math.max(selection[1], selection[3]);
-  let [startRow, startColumn, endRow] = [
+  const [startRow, startColumn, endRow, endColumn] = [
     Math.min(selection[0], selection[2]),
     Math.min(selection[1], selection[3]),
     Math.max(selection[0], selection[2]),
+    Math.max(selection[1], selection[3])
   ];
+  const config = {
+    startColumn: Math.max(startColumn, 0),
+    endColumn: Math.max(endColumn, 0),
+  };
+
+  if (withColumnHeaders === true && columnHeadersCount > 0) {
+    if (onlyFirstLevel === true) {
+      config.startColumnHeader = -1;
+
+    } else {
+      config.startColumnHeader = -1 * columnHeadersCount;
+    }
+  }
+
+  if (withRowHeaders === true && startRow === -1) {
+    config.startRowHeader = startRow;
+  }
 
   if (withCells === false) {
-    startRow = Math.min(startRow, -1);
-    endRow = Math.min(endRow, -1);
-
-    return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, withRowHeaders, true);
+    return getTableByCoords(instance, config);
   }
 
-  if (withColumnHeaders === false) {
-    startRow = Math.max(startRow, 0);
-
-  } else if (onlyFirstLevel === true) {
-    startRow = Math.max(startRow, -1);
+  if (endRow >= 0) {
+    config.startRow = Math.max(startRow, 0);
+    config.endRow = endRow;
   }
 
-  if (withRowHeaders === false) {
-    startColumn = Math.max(startColumn, 0);
-
-  } else if (onlyFirstLevel === true) {
-    startColumn = Math.max(startColumn, -1);
-  }
-
-  return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, withRowHeaders, withColumnHeaders);
+  return getTableByCoords(instance, config);
 }
 
 /**
@@ -99,85 +103,85 @@ function encodeHTMLEntities(text) {
  *
  * @private
  * @param {Core} instance The Handsontable instance.
- * @param {number} startRow Starting row for creating a HTML table.
- * @param {number} startColumn Starting row for creating a HTML table.
- * @param {number} endRow Ending row for creating a HTML table.
- * @param {number} endColumn Ending row for creating a HTML table.
- * @param {boolean} includeRowHeaders Defines whether row headers should be included in created HTML table.
- * @param {boolean} includeColumnHeaders Defines whether row headers should be included in created HTML table.
+ * @param {object} config
  * @returns {string}
  */
-function getTableByCoords(instance, startRow, startColumn, endRow, endColumn, includeRowHeaders, includeColumnHeaders) {
-  const data = instance.getData(startRow, startColumn, endRow, endColumn);
-  const countRows = endRow - startRow + 1;
-  const countCols = endColumn - startColumn + 1;
-  const TABLE = ['<table>', '</table>'];
-  const THEAD = includeColumnHeaders ? ['<thead>', '</thead>'] : [];
-  const TBODY = ['<tbody>', '</tbody>'];
+function getTableByCoords(instance, config) {
+  const TABLE = ['<table>'];
+  const THEAD = [];
+  const TBODY = [];
+  const { startRow, startColumn, endRow, endColumn, startColumnHeader } = config;
 
-  if (data.length === 0) {
-    return '<table></table>';
+  if (isDefined(startColumnHeader)) {
+    const headers = [];
+
+    for (let columnHeaderLevel = startColumnHeader; columnHeaderLevel < 0; columnHeaderLevel += 1) {
+      const tr = ['<tr>'];
+
+      if (config.startRowHeader === -1) {
+        tr.push(`<th>${encodeHTMLEntities(instance.getRowHeader(columnHeaderLevel))}</th>`);
+      }
+
+      for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
+        tr.push(`<th>${encodeHTMLEntities(instance.getColHeader(columnIndex, columnHeaderLevel))}</th>`);
+      }
+
+      tr.push('</tr>');
+      headers.push(...tr);
+    }
+
+    THEAD.push('<thead>', ...headers, '</thead>');
   }
 
-  for (let row = 0; row < countRows; row += 1) {
-    const isColumnHeadersRow = includeColumnHeaders && startRow + row < 0;
-    const CELLS = [];
+  if (isDefined(startRow)) {
+    const cells = [];
+    const data = instance.getData(startRow, startColumn, endRow, endColumn);
+    const lastRowIndex = endRow - startRow + 1;
+    const lastColumnIndex = endColumn - startColumn + 1;
 
-    for (let column = 0; column < countCols; column += 1) {
-      const isRowHeadersColumn = !isColumnHeadersRow && includeRowHeaders && startColumn + column < 0;
-      let cell = '';
+    for (let rowIndex = 0; rowIndex < lastRowIndex; rowIndex += 1) {
+      const tr = ['<tr>'];
 
-      if (isColumnHeadersRow) {
-        cell = `<th>${encodeHTMLEntities(instance.getColHeader(startColumn + column, startRow + row))}</th>`;
+      if (config.startRowHeader === -1) {
+        tr.push(`<th>${encodeHTMLEntities(instance.getRowHeader(startRow + rowIndex))}</th>`);
+      }
 
-      } else if (isRowHeadersColumn) {
-        cell = `<th>${encodeHTMLEntities(instance.getRowHeader(row))}</th>`;
-
-      } else {
-        const cellData = data[row][column];
+      for (let columnIndex = 0; columnIndex < lastColumnIndex; columnIndex += 1) {
+        const cellData = encodeHTMLEntities(data[rowIndex][columnIndex]);
         const { hidden, rowspan, colspan } =
-          instance.getCellMeta(startRow + row, startColumn + column);
+          instance.getCellMeta(rowIndex + startRow, columnIndex + startColumn);
 
         if (!hidden) {
           const attrs = [];
 
           if (rowspan) {
-            const recalculatedRowSpan = Math.min(rowspan, countRows - row);
+            const recalculatedRowSpan = Math.min(rowspan, lastRowIndex - rowIndex);
 
             if (recalculatedRowSpan > 1) {
               attrs.push(` rowspan="${recalculatedRowSpan}"`);
             }
           }
+
           if (colspan) {
-            const recalculatedColumnSpan = Math.min(colspan, countCols - column);
+            const recalculatedColumnSpan = Math.min(colspan, lastColumnIndex - columnIndex);
 
             if (recalculatedColumnSpan > 1) {
               attrs.push(` colspan="${recalculatedColumnSpan}"`);
             }
           }
-          if (isEmpty(cellData)) {
-            cell = `<td${attrs.join('')}></td>`;
-          } else {
-            const value = cellData.toString();
 
-            cell = `<td${attrs.join('')}>${encodeHTMLEntities(value)}</td>`;
-          }
+          tr.push(`<td${attrs.join('')}>${encodeHTMLEntities(cellData)}</td>`);
         }
       }
 
-      CELLS.push(cell);
+      tr.push('</tr>');
+      cells.push(...tr);
     }
 
-    const TR = ['<tr>', ...CELLS, '</tr>'].join('');
-
-    if (isColumnHeadersRow) {
-      THEAD.splice(-1, 0, TR);
-    } else {
-      TBODY.splice(-1, 0, TR);
-    }
+    TBODY.push('<tbody>', ...cells, '</tbody>');
   }
 
-  TABLE.splice(1, 0, THEAD.join(''), TBODY.join(''));
+  TABLE.push(...THEAD, ...TBODY, '</table>');
 
   return TABLE.join('');
 }

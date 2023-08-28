@@ -52,16 +52,22 @@ describe('CopyPaste', () => {
       plugin.onCopy(copyEvent); // emulate native "copy" event
 
       expect(copyEvent.clipboardData.getData('text/plain')).toBe('A-0-0\nA-0-1\nA-0-2\nA2');
+      /* eslint-disable indent */
       expect(copyEvent.clipboardData.getData('text/html')).toBe([
-        '<meta name="generator" content="Handsontable"/>' +
-          '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
-        '<table><tbody>',
-        '<tr><td>A-0-0</td></tr>',
-        '<tr><td>A-0-1</td></tr>',
-        '<tr><td>A-0-2</td></tr>',
-        '<tr><td>A2</td></tr>',
-        '</tbody></table>',
+        '<meta name="generator" content="Handsontable"/>',
+        '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
+        '<table>',
+          '<thead>',
+            '<tr><th>A-0-0</th></tr>',
+            '<tr><th>A-0-1</th></tr>',
+            '<tr><th>A-0-2</th></tr>',
+          '</thead>',
+          '<tbody>',
+            '<tr><td>A2</td></tr>',
+          '</tbody>',
+        '</table>',
       ].join(''));
+      /* eslint-disable */
     });
 
     it('should copy all column headers with cells to the clipboard when all cells and headers are selected', () => {
@@ -106,17 +112,23 @@ describe('CopyPaste', () => {
         'A1\tB1\tC1',
         'A2\tB2\tC2',
       ].join('\n'));
+      /* eslint-disable indent */
       expect(copyEvent.clipboardData.getData('text/html')).toBe([
-        '<meta name="generator" content="Handsontable"/>' +
-          '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
-        '<table><tbody>',
-        '<tr><td>A-0-0</td><td>B-1-0</td><td>C-2-0</td></tr>',
-        '<tr><td>A-0-1</td><td>B-1-1</td><td>C-2-1</td></tr>',
-        '<tr><td>A-0-2</td><td>B-1-2</td><td>C-2-2</td></tr>',
-        '<tr><td>A1</td><td>B1</td><td>C1</td></tr>',
-        '<tr><td>A2</td><td>B2</td><td>C2</td></tr>',
-        '</tbody></table>',
+        '<meta name="generator" content="Handsontable"/>',
+        '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
+        '<table>',
+          '<thead>',
+            '<tr><th>A-0-0</th><th>B-1-0</th><th>C-2-0</th></tr>',
+            '<tr><th>A-0-1</th><th>B-1-1</th><th>C-2-1</th></tr>',
+            '<tr><th>A-0-2</th><th>B-1-2</th><th>C-2-2</th></tr>',
+          '</thead>',
+          '<tbody>',
+            '<tr><td>A1</td><td>B1</td><td>C1</td></tr>',
+            '<tr><td>A2</td><td>B2</td><td>C2</td></tr>',
+          '</tbody>',
+        '</table>',
       ].join(''));
+      /* eslint-disable */
     });
 
     it('should copy cells with all column headers to the clipboard when all rows are hidden', () => {
