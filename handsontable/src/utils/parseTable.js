@@ -43,7 +43,8 @@ export function instanceToHTML(instance) {
  * @returns {string} OuterHTML of the HTMLTableElement.
  */
 export function selectionToHTML(instance, metaInfoAndModifiers) {
-  const { withCells, withColumnHeaders, withRowHeaders, onlyFirstLevel, columnHeadersCount } = metaInfoAndModifiers;
+  const { withCells, withColumnHeaders, withRowHeaders, onlyFirstLevel, columnHeadersCount, rowsLimit, columnsLimit }
+    = metaInfoAndModifiers;
   const selection = instance.getSelectedLast();
   const [startRow, startColumn, endRow, endColumn] = [
     Math.min(selection[0], selection[2]),
@@ -52,6 +53,8 @@ export function selectionToHTML(instance, metaInfoAndModifiers) {
     Math.max(selection[1], selection[3])
   ];
   const config = {
+    rowsLimit,
+    columnsLimit,
     startColumn: Math.max(startColumn, 0),
     endColumn: Math.max(endColumn, 0),
   };
@@ -110,7 +113,7 @@ function getTableByCoords(instance, config) {
   const TABLE = ['<table>'];
   const THEAD = [];
   const TBODY = [];
-  const { startRow, startColumn, endRow, endColumn, startColumnHeader } = config;
+  const { startRow, startColumn, endRow, endColumn, startColumnHeader, rowsLimit, columnsLimit } = config;
 
   if (isDefined(startColumnHeader)) {
     const headers = [];
@@ -122,7 +125,9 @@ function getTableByCoords(instance, config) {
         tr.push(`<th>${encodeHTMLEntities(instance.getRowHeader(columnHeaderLevel))}</th>`);
       }
 
-      for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
+      const lastCopiedColumnIndex = Math.min(startColumn + columnsLimit - 1, endColumn);
+
+      for (let columnIndex = startColumn; columnIndex <= lastCopiedColumnIndex; columnIndex += 1) {
         const header = instance.getCell(columnHeaderLevel, columnIndex);
         const colspan = header?.getAttribute('colspan');
         let colspanAttribute = '';
@@ -148,17 +153,17 @@ function getTableByCoords(instance, config) {
   if (isDefined(startRow)) {
     const cells = [];
     const data = instance.getData(startRow, startColumn, endRow, endColumn);
-    const lastRowIndex = endRow - startRow + 1;
-    const lastColumnIndex = endColumn - startColumn + 1;
+    const countRows = Math.min(endRow - startRow + 1, rowsLimit);
+    const countColumns = Math.min(endColumn - startColumn + 1, columnsLimit);
 
-    for (let rowIndex = 0; rowIndex < lastRowIndex; rowIndex += 1) {
+    for (let rowIndex = 0; rowIndex < countRows; rowIndex += 1) {
       const tr = ['<tr>'];
 
       if (config.startRowHeader === -1) {
         tr.push(`<th>${encodeHTMLEntities(instance.getRowHeader(startRow + rowIndex))}</th>`);
       }
 
-      for (let columnIndex = 0; columnIndex < lastColumnIndex; columnIndex += 1) {
+      for (let columnIndex = 0; columnIndex < countColumns; columnIndex += 1) {
         const cellData = encodeHTMLEntities(data[rowIndex][columnIndex]);
         const { hidden, rowspan, colspan } =
           instance.getCellMeta(rowIndex + startRow, columnIndex + startColumn);
@@ -167,7 +172,7 @@ function getTableByCoords(instance, config) {
           const attrs = [];
 
           if (rowspan) {
-            const recalculatedRowSpan = Math.min(rowspan, lastRowIndex - rowIndex);
+            const recalculatedRowSpan = Math.min(rowspan, countRows - rowIndex);
 
             if (recalculatedRowSpan > 1) {
               attrs.push(` rowspan="${recalculatedRowSpan}"`);
@@ -175,7 +180,7 @@ function getTableByCoords(instance, config) {
           }
 
           if (colspan) {
-            const recalculatedColumnSpan = Math.min(colspan, lastColumnIndex - columnIndex);
+            const recalculatedColumnSpan = Math.min(colspan, countColumns - columnIndex);
 
             if (recalculatedColumnSpan > 1) {
               attrs.push(` colspan="${recalculatedColumnSpan}"`);

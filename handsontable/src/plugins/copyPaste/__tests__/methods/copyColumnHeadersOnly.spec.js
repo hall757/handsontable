@@ -59,7 +59,7 @@ describe('CopyPaste', () => {
           '</thead>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should copy only the most-bottom column headers when all cells are selected', () => {
@@ -105,7 +105,7 @@ describe('CopyPaste', () => {
           '</thead>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should copy only the most-bottom column headers when all rows are hidden', () => {
@@ -139,7 +139,7 @@ describe('CopyPaste', () => {
           '</thead>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should copy an empty string to the clipboard when all rows are hidden and the `colHeaders` is disabled', () => {
@@ -201,7 +201,7 @@ describe('CopyPaste', () => {
           '</thead>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should copy an empty string to the clipboard when all columns are hidden and the `colHeaders` is disabled', () => {

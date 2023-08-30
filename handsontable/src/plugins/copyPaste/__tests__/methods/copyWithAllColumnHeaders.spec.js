@@ -67,7 +67,7 @@ describe('CopyPaste', () => {
           '</tbody>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should copy all column headers with cells to the clipboard when all cells and headers are selected', () => {
@@ -128,7 +128,7 @@ describe('CopyPaste', () => {
           '</tbody>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should copy cells with all column headers to the clipboard when all rows are hidden', () => {

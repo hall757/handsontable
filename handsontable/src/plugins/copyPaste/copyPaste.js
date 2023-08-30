@@ -567,25 +567,25 @@ export class CopyPaste extends BasePlugin {
     this.#isTriggeredByCopy = false;
 
     const data = this.getRangedData(this.copyableRanges);
-    const metaInfoAndModifiers = {
+    const copyConfig = {
       ...this.#countCopiedHeaders(this.copyableRanges),
+      withCells: this.#copyMode !== 'column-headers-only',
+      withColumnHeaders: this.#copyMode !== 'cells-only',
+      withRowHeaders: false,
+      onlyFirstLevel: this.#copyMode === 'with-column-headers',
+      rowsLimit: this.rowsLimit,
+      columnsLimit: this.columnsLimit,
       ignoredRows: [],
       ignoredColumns: [],
     };
 
-    const allowCopying = !!this.hot.runHooks('beforeCopy', data, this.copyableRanges, metaInfoAndModifiers);
+    const allowCopying = !!this.hot.runHooks('beforeCopy', data, this.copyableRanges, copyConfig);
 
     if (allowCopying) {
       const textPlain = stringify(data);
 
       if (event && event.clipboardData) {
-        const textHTML = selectionToHTML(this.hot, {
-          withCells: this.#copyMode !== 'column-headers-only',
-          withColumnHeaders: this.#copyMode !== 'cells-only',
-          withRowHeaders: false,
-          onlyFirstLevel: this.#copyMode === 'with-column-headers',
-          ...metaInfoAndModifiers
-        });
+        const textHTML = selectionToHTML(this.hot, copyConfig);
 
         event.clipboardData.setData('text/plain', textPlain);
         event.clipboardData.setData('text/html', [META_HEAD, textHTML].join(''));
@@ -594,7 +594,7 @@ export class CopyPaste extends BasePlugin {
         this.hot.rootWindow.clipboardData.setData('Text', textPlain);
       }
 
-      this.hot.runHooks('afterCopy', data, this.copyableRanges, metaInfoAndModifiers);
+      this.hot.runHooks('afterCopy', data, this.copyableRanges, copyConfig);
     }
 
     this.#copyMode = 'cells-only';

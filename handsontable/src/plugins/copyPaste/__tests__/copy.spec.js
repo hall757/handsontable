@@ -78,7 +78,7 @@ describe('CopyPaste', () => {
           '</tbody>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should copy text in quotes to the clipboard', () => {
@@ -117,7 +117,7 @@ describe('CopyPaste', () => {
           '</tbody>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should copy 0 and false values to the clipboard', () => {
@@ -149,7 +149,7 @@ describe('CopyPaste', () => {
           '</tbody>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
 
     it('should handle spaces properly (creates Excel compatible HTML)', () => {
@@ -187,7 +187,7 @@ describe('CopyPaste', () => {
           '</tbody>',
         '</table>',
       ].join(''));
-      /* eslint-disable */
+      /* eslint-enable */
     });
   });
 });
