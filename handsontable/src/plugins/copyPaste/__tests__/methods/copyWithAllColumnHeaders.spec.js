@@ -173,14 +173,18 @@ describe('CopyPaste', () => {
         'B3\tC3\tD3',
       ].join('\n'));
       expect(copyEvent.clipboardData.getData('text/html')).toBe([
-        '<meta name="generator" content="Handsontable"/>' +
-          '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
-        '<table><tbody>',
-        '<tr><td>B-1-0</td><td>C-2-0</td><td>D-3-0</td></tr>',
-        '<tr><td>B-1-1</td><td>C-2-1</td><td>D-3-1</td></tr>',
-        '<tr><td>B2</td><td>C2</td><td>D2</td></tr>',
-        '<tr><td>B3</td><td>C3</td><td>D3</td></tr>',
-        '</tbody></table>',
+        '<meta name="generator" content="Handsontable"/>',
+        '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
+        '<table>',
+          '<thead>',
+            '<tr><th>B-1-0</th><th>C-2-0</th><th>D-3-0</th></tr>',
+            '<tr><th>B-1-1</th><th>C-2-1</th><th>D-3-1</th></tr>',
+          '</thead>',
+          '<tbody>',
+            '<tr><td>B2</td><td>C2</td><td>D2</td></tr>',
+            '<tr><td>B3</td><td>C3</td><td>D3</td></tr>',
+          '</tbody>',
+        '</table>',
       ].join(''));
     });
 
@@ -257,14 +261,18 @@ describe('CopyPaste', () => {
         'B3\tC3\tD3',
       ].join('\n'));
       expect(copyEvent.clipboardData.getData('text/html')).toBe([
-        '<meta name="generator" content="Handsontable"/>' +
-          '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
-        '<table><tbody>',
-        '<tr><td>B-1-0</td><td>C-2-0</td><td>D-3-0</td></tr>',
-        '<tr><td>B-1-1</td><td>C-2-1</td><td>D-3-1</td></tr>',
-        '<tr><td>B2</td><td>C2</td><td>D2</td></tr>',
-        '<tr><td>B3</td><td>C3</td><td>D3</td></tr>',
-        '</tbody></table>',
+        '<meta name="generator" content="Handsontable"/>',
+        '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
+        '<table>',
+        '<thead>',
+          '<tr><th>B-1-0</th><th>C-2-0</th><th>D-3-0</th></tr>',
+          '<tr><th>B-1-1</th><th>C-2-1</th><th>D-3-1</th></tr>',
+        '</thead>',
+        '<tbody>',
+          '<tr><td>B2</td><td>C2</td><td>D2</td></tr>',
+          '<tr><td>B3</td><td>C3</td><td>D3</td></tr>',
+        '</tbody>',
+        '</table>',
       ].join(''));
     });
 

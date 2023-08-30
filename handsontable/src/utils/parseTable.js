@@ -123,7 +123,19 @@ function getTableByCoords(instance, config) {
       }
 
       for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
-        tr.push(`<th>${encodeHTMLEntities(instance.getColHeader(columnIndex, columnHeaderLevel))}</th>`);
+        const header = instance.getCell(columnHeaderLevel, columnIndex);
+        const colspan = header?.getAttribute('colspan');
+        let colspanAttribute = '';
+
+        if (colspan) {
+          const parsedColspan = parseInt(colspan, 10);
+
+          colspanAttribute = ` colspan=${parsedColspan}`;
+          columnIndex += parsedColspan - 1;
+        }
+
+        tr.push(`<th${colspanAttribute}>${encodeHTMLEntities(instance.getColHeader(
+          columnIndex, columnHeaderLevel))}</th>`);
       }
 
       tr.push('</tr>');
