@@ -122,7 +122,7 @@ function getTableByCoords(instance, config) {
       const tr = ['<tr>'];
 
       if (config.startRowHeader === -1) {
-        tr.push(`<th>${encodeHTMLEntities(instance.getRowHeader(columnHeaderLevel))}</th>`);
+        tr.push(`<th>${encodeHTMLEntities(instance.getColHeader(-1, columnHeaderLevel))}</th>`);
       }
 
       const lastCopiedColumnIndex = Math.min(startColumn + columnsLimit - 1, endColumn);
