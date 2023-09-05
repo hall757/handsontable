@@ -15,7 +15,7 @@ import {
   CopyableRangesFactory,
   normalizeRanges,
 } from './copyableRanges';
-import { _dataToHTML, htmlToGridSettings, selectionToHTML } from '../../utils/parseTable';
+import { _dataToHTML, htmlToGridSettings, selectionToHTML, selectionToData, getConfig } from '../../utils/parseTable';
 
 import './copyPaste.css';
 
@@ -566,7 +566,6 @@ export class CopyPaste extends BasePlugin {
     this.setCopyableText();
     this.#isTriggeredByCopy = false;
 
-    const data = this.getRangedData(this.copyableRanges);
     const copyConfig = {
       ...this.#countCopiedHeaders(this.copyableRanges),
       withCells: this.#copyMode !== 'column-headers-only',
@@ -575,17 +574,23 @@ export class CopyPaste extends BasePlugin {
       onlyFirstLevel: this.#copyMode === 'with-column-headers',
       rowsLimit: this.rowsLimit,
       columnsLimit: this.columnsLimit,
+      ignoredRowHeaders: [],
+      ignoredColumnHeaders: [],
       ignoredRows: [],
       ignoredColumns: [],
     };
 
-    const allowCopying = !!this.hot.runHooks('beforeCopy', data, this.copyableRanges, copyConfig);
+    const data = selectionToData(this.hot, getConfig(this.hot, copyConfig));
+
+    const allowCopying = !!this.hot.runHooks('beforeCopy', data, this.copyableRanges, getConfig(this.hot, copyConfig));
+    const ignoredRowsSet = new Set(copyConfig.ignoredRows);
+    const modifiedData = data.filter((row, rowIndex) => ignoredRowsSet.has(rowIndex) === false);
 
     if (allowCopying) {
-      const textPlain = stringify(data);
+      const textPlain = stringify(modifiedData);
 
       if (event && event.clipboardData) {
-        const textHTML = selectionToHTML(this.hot, copyConfig);
+        const textHTML = selectionToHTML(this.hot, this.copyableRanges);
 
         event.clipboardData.setData('text/plain', textPlain);
         event.clipboardData.setData('text/html', [META_HEAD, textHTML].join(''));
@@ -594,7 +599,7 @@ export class CopyPaste extends BasePlugin {
         this.hot.rootWindow.clipboardData.setData('Text', textPlain);
       }
 
-      this.hot.runHooks('afterCopy', data, this.copyableRanges, copyConfig);
+      this.hot.runHooks('afterCopy', modifiedData, this.copyableRanges, copyConfig);
     }
 
     this.#copyMode = 'cells-only';

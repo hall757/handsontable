@@ -35,16 +35,9 @@ export function instanceToHTML(instance) {
   return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, includeRowHeaders, includeColumnHeaders);
 }
 
-/**
- * Converts Handsontable's selection into HTMLTableElement.
- *
- * @param {Core} instance The Handsontable instance.
- * @param {object} metaInfoAndModifiers
- * @returns {string} OuterHTML of the HTMLTableElement.
- */
-export function selectionToHTML(instance, metaInfoAndModifiers) {
-  const { withCells, withColumnHeaders, withRowHeaders, onlyFirstLevel, columnHeadersCount, rowsLimit, columnsLimit }
-    = metaInfoAndModifiers;
+export function getConfig(instance, metaInfoAndModifiers) {
+  const { withCells, withColumnHeaders, withRowHeaders, onlyFirstLevel, columnHeadersCount, rowsLimit, columnsLimit,
+    ignoredRows, ignoredColumns } = metaInfoAndModifiers;
   const selection = instance.getSelectedLast();
   const [startRow, startColumn, endRow, endColumn] = [
     Math.min(selection[0], selection[2]),
@@ -53,8 +46,8 @@ export function selectionToHTML(instance, metaInfoAndModifiers) {
     Math.max(selection[1], selection[3])
   ];
   const config = {
-    rowsLimit,
-    columnsLimit,
+    ignoredRows,
+    ignoredColumns,
     startColumn: Math.max(startColumn, 0),
     endColumn: Math.max(endColumn, 0),
   };
@@ -73,15 +66,39 @@ export function selectionToHTML(instance, metaInfoAndModifiers) {
   }
 
   if (withCells === false) {
-    return getTableByCoords(instance, config);
+    return config;
   }
 
   if (endRow >= 0) {
     config.startRow = Math.max(startRow, 0);
-    config.endRow = endRow;
+
+    if (rowsLimit !== Infinity) {
+      config.endRow = endRow;
+
+    } else {
+      config.endRow = Math.min(endRow, config.startRow + rowsLimit);
+    }
   }
 
-  return getTableByCoords(instance, config);
+  return config;
+}
+
+/**
+ * Converts Handsontable's selection into HTMLTableElement.
+ *
+ * @param {Core} instance The Handsontable instance.
+ * @param {object} metaInfoAndModifiers
+ * @returns {string} OuterHTML of the HTMLTableElement.
+ */
+export function selectionToHTML(instance, metaInfoAndModifiers) {
+  return getTableByCoords(instance, getConfig(instance, metaInfoAndModifiers));
+}
+
+export function selectionToData(instance, metaInfoAndModifiers) {
+  return [
+    ...getHeadersDataByCoords(instance, metaInfoAndModifiers),
+    ...getBodyDataByCoords(instance, metaInfoAndModifiers),
+  ];
 }
 
 /**
@@ -101,19 +118,8 @@ function encodeHTMLEntities(text) {
     .replace(/\t/gi, '&#9;');
 }
 
-/**
- * Creates OuterHTML of the HTMLTableElement from instance of Handsontable basing on handled coordinates.
- *
- * @private
- * @param {Core} instance The Handsontable instance.
- * @param {object} config
- * @returns {string}
- */
-function getTableByCoords(instance, config) {
-  const TABLE = ['<table>'];
-  const THEAD = [];
-  const TBODY = [];
-  const { startRow, startColumn, endRow, endColumn, startColumnHeader, rowsLimit, columnsLimit } = config;
+function getHeadersHTMLByCoords(instance, config) {
+  const { startColumn, endColumn, startColumnHeader, columnsLimit } = config;
 
   if (isDefined(startColumnHeader)) {
     const headers = [];
@@ -147,8 +153,43 @@ function getTableByCoords(instance, config) {
       headers.push(...tr);
     }
 
-    THEAD.push('<thead>', ...headers, '</thead>');
+    if (headers.length > 0) {
+      return ['<thead>', ...headers, '</thead>'];
+    }
   }
+
+  return [];
+}
+
+function getHeadersDataByCoords(instance, metaInfoAndModifiers) {
+  const { startRowHeader, startColumn, endColumn, startColumnHeader, columnsLimit } = getConfig(instance, metaInfoAndModifiers);
+  const headers = [];
+
+  if (isDefined(startColumnHeader)) {
+    for (let columnHeaderLevel = startColumnHeader; columnHeaderLevel < 0; columnHeaderLevel += 1) {
+      const tr = [];
+
+      if (startRowHeader === -1) {
+        tr.push(instance.getColHeader(-1, columnHeaderLevel));
+      }
+
+      const lastCopiedColumnIndex = Math.min(startColumn + columnsLimit - 1, endColumn);
+
+      for (let columnIndex = startColumn; columnIndex <= lastCopiedColumnIndex; columnIndex += 1) {
+        tr.push(instance.getColHeader(columnIndex, columnHeaderLevel));
+      }
+
+      headers.push(tr);
+    }
+  }
+
+  return headers;
+}
+
+function getBodyHTMLByCoords(instance, config) {
+  const { startRow, startColumn, endRow, endColumn, rowsLimit, columnsLimit } = config;
+  const ignoredRows = new Set(config.ignoredRows);
+  const ignoredColumns = new Set(config.ignoredColumns);
 
   if (isDefined(startRow)) {
     const cells = [];
@@ -156,15 +197,17 @@ function getTableByCoords(instance, config) {
     const countRows = Math.min(endRow - startRow + 1, rowsLimit);
     const countColumns = Math.min(endColumn - startColumn + 1, columnsLimit);
 
-    for (let rowIndex = 0; rowIndex < countRows; rowIndex += 1) {
+    for (let rowIndex = 0; rowIndex < countRows && ignoredRows.has(rowIndex) === false; rowIndex += 1) {
       const tr = ['<tr>'];
 
       if (config.startRowHeader === -1) {
         tr.push(`<th>${encodeHTMLEntities(instance.getRowHeader(startRow + rowIndex))}</th>`);
       }
 
-      for (let columnIndex = 0; columnIndex < countColumns; columnIndex += 1) {
-        const cellData = encodeHTMLEntities(data[rowIndex][columnIndex]);
+      for (let columnIndex = 0; columnIndex < countColumns && ignoredColumns.has(columnIndex) === false;
+        columnIndex += 1) {
+        const cellValue = data[rowIndex][columnIndex];
+        const cellValueParsed = isEmpty(cellValue) ? '' : encodeHTMLEntities(cellValue);
         const { hidden, rowspan, colspan } =
           instance.getCellMeta(rowIndex + startRow, columnIndex + startColumn);
 
@@ -187,7 +230,7 @@ function getTableByCoords(instance, config) {
             }
           }
 
-          tr.push(`<td${attrs.join('')}>${encodeHTMLEntities(cellData)}</td>`);
+          tr.push(`<td${attrs.join('')}>${cellValueParsed}</td>`);
         }
       }
 
@@ -195,12 +238,58 @@ function getTableByCoords(instance, config) {
       cells.push(...tr);
     }
 
-    TBODY.push('<tbody>', ...cells, '</tbody>');
+    if (cells.length > 0) {
+      return ['<tbody>', ...cells, '</tbody>'];
+    }
   }
 
-  TABLE.push(...THEAD, ...TBODY, '</table>');
+  return [];
+}
 
-  return TABLE.join('');
+function getBodyDataByCoords(instance, config) {
+  const { startRow, startColumn, endRow, endColumn, rowsLimit, columnsLimit, startRowHeader } = getConfig(instance, config);
+  const ignoredRows = new Set(config.ignoredRows);
+  const ignoredColumns = new Set(config.ignoredColumns);
+  const cells = [];
+
+  if (isDefined(startRow)) {
+    const data = instance.getData(startRow, startColumn, endRow, endColumn);
+    const countRows = Math.min(endRow - startRow + 1, rowsLimit);
+    const countColumns = Math.min(endColumn - startColumn + 1, columnsLimit);
+
+    for (let rowIndex = 0; rowIndex < countRows && ignoredRows.has(rowIndex) === false; rowIndex += 1) {
+      const tr = [];
+
+      if (startRowHeader === -1) {
+        tr.push(instance.getRowHeader(startRow + rowIndex));
+      }
+
+      for (let columnIndex = 0; columnIndex < countColumns && ignoredColumns.has(columnIndex) === false;
+        columnIndex += 1) {
+        const cellValue = data[rowIndex][columnIndex];
+        const cellValueParsed = isEmpty(cellValue) ? '' : cellValue;
+
+        tr.push(cellValueParsed);
+      }
+
+      cells.push(tr);
+    }
+  }
+
+  return cells;
+}
+
+/**
+ * Creates OuterHTML of the HTMLTableElement from instance of Handsontable basing on handled coordinates.
+ *
+ * @private
+ * @param {Core} instance The Handsontable instance.
+ * @param {object} config
+ * @returns {string}
+ */
+function getTableByCoords(instance, config) {
+  return ['<table>', ...getHeadersHTMLByCoords(instance, config), ...getBodyHTMLByCoords(instance, config),
+    '</table>'].join('');
 }
 
 /**
