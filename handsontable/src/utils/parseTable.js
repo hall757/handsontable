@@ -1,4 +1,5 @@
 import { isDefined, isEmpty } from './../helpers/mixed';
+import {rangeEach} from "../helpers/number";
 
 const ESCAPED_HTML_CHARS = {
   '&nbsp;': '\x20',
@@ -90,15 +91,36 @@ export function getConfig(instance, metaInfoAndModifiers) {
  * @param {object} metaInfoAndModifiers
  * @returns {string} OuterHTML of the HTMLTableElement.
  */
-export function selectionToHTML(instance, metaInfoAndModifiers) {
-  return getTableByCoords(instance, getConfig(instance, metaInfoAndModifiers));
+export function selectionToHTML(instance, copyableRanges, metaInfoAndModifiers) {
+  const data = ['<table>'];
+
+  if (metaInfoAndModifiers.columnHeadersCount !== 0) {
+    data.push(...getHeadersHTMLByCoords(instance, copyableRanges, metaInfoAndModifiers));
+  }
+
+  if (metaInfoAndModifiers.columnHeadersCount === 0 ||
+    (metaInfoAndModifiers.columnHeadersCount > 0 && copyableRanges.length > 1)) {
+    data.push(...getBodyHTMLByCoords(instance, copyableRanges, metaInfoAndModifiers));
+  }
+
+  data.push('</table>');
+
+  return data.join('');
 }
 
-export function selectionToData(instance, metaInfoAndModifiers) {
-  return [
-    ...getHeadersDataByCoords(instance, metaInfoAndModifiers),
-    ...getBodyDataByCoords(instance, metaInfoAndModifiers),
-  ];
+export function selectionToData(instance, copyableRanges, metaInfoAndModifiers) {
+  const data = [];
+
+  if (metaInfoAndModifiers.columnHeadersCount > 0) {
+    data.push(...getHeadersDataByCoords(instance, copyableRanges, metaInfoAndModifiers));
+  }
+
+  if (metaInfoAndModifiers.columnHeadersCount === 0 ||
+    (metaInfoAndModifiers.columnHeadersCount > 0 && copyableRanges.length > 1)) {
+    data.push(...getBodyDataByCoords(instance, copyableRanges, metaInfoAndModifiers));
+  }
+
+  return data;
 }
 
 /**
@@ -118,23 +140,22 @@ function encodeHTMLEntities(text) {
     .replace(/\t/gi, '&#9;');
 }
 
-function getHeadersHTMLByCoords(instance, config) {
-  const { startColumn, endColumn, startColumnHeader, columnsLimit } = config;
+function getHeadersHTMLByCoords(instance, copyableRanges, config) {
+  const { startRow, startCol, endCol } = copyableRanges[0];
+  const ignoredRows = new Set(config.ignoredRows);
+  const ignoredColumns = new Set(config.ignoredColumns);
+  const headers = [];
 
-  if (isDefined(startColumnHeader)) {
-    const headers = [];
+  rangeEach(startRow, -1, (rowIndex) => {
+    if (ignoredRows.has(rowIndex)) {
+      return;
+    }
 
-    for (let columnHeaderLevel = startColumnHeader; columnHeaderLevel < 0; columnHeaderLevel += 1) {
-      const tr = ['<tr>'];
+    const tr = ['<tr>'];
 
-      if (config.startRowHeader === -1) {
-        tr.push(`<th>${encodeHTMLEntities(instance.getColHeader(-1, columnHeaderLevel))}</th>`);
-      }
-
-      const lastCopiedColumnIndex = Math.min(startColumn + columnsLimit - 1, endColumn);
-
-      for (let columnIndex = startColumn; columnIndex <= lastCopiedColumnIndex; columnIndex += 1) {
-        const header = instance.getCell(columnHeaderLevel, columnIndex);
+    for (let columnIndex = startCol; columnIndex <= endCol; columnIndex += 1) {
+      if (ignoredColumns.has(columnIndex) === false) {
+        const header = instance.getCell(rowIndex, columnIndex);
         const colspan = header?.getAttribute('colspan');
         let colspanAttribute = '';
 
@@ -146,135 +167,144 @@ function getHeadersHTMLByCoords(instance, config) {
         }
 
         tr.push(`<th${colspanAttribute}>${encodeHTMLEntities(instance.getColHeader(
-          columnIndex, columnHeaderLevel))}</th>`);
+          columnIndex, rowIndex))}</th>`);
       }
+    }
 
-      tr.push('</tr>');
+    tr.push('</tr>');
+
+    if (tr.length > 2) {
       headers.push(...tr);
     }
+  });
 
-    if (headers.length > 0) {
-      return ['<thead>', ...headers, '</thead>'];
-    }
+  if (headers.length > 0) {
+    return ['<thead>', ...headers, '</thead>'];
   }
 
   return [];
 }
 
-function getHeadersDataByCoords(instance, metaInfoAndModifiers) {
-  const { startRowHeader, startColumn, endColumn, startColumnHeader, columnsLimit } = getConfig(instance, metaInfoAndModifiers);
+function getHeadersDataByCoords(instance, copyableRanges, config) {
+  const { startRow, startCol, endCol } = copyableRanges[0];
   const headers = [];
+  const ignoredRows = new Set(config.ignoredRows);
 
-  if (isDefined(startColumnHeader)) {
-    for (let columnHeaderLevel = startColumnHeader; columnHeaderLevel < 0; columnHeaderLevel += 1) {
-      const tr = [];
-
-      if (startRowHeader === -1) {
-        tr.push(instance.getColHeader(-1, columnHeaderLevel));
-      }
-
-      const lastCopiedColumnIndex = Math.min(startColumn + columnsLimit - 1, endColumn);
-
-      for (let columnIndex = startColumn; columnIndex <= lastCopiedColumnIndex; columnIndex += 1) {
-        tr.push(instance.getColHeader(columnIndex, columnHeaderLevel));
-      }
-
-      headers.push(tr);
+  rangeEach(startRow, -1, (rowIndex) => {
+    if (ignoredRows.has(rowIndex)) {
+      return;
     }
-  }
+
+    const tr = [];
+
+    rangeEach(startCol, endCol, (columnIndex) => {
+      tr.push(instance.getColHeader(columnIndex, rowIndex));
+    });
+
+    headers.push(tr);
+  });
 
   return headers;
 }
 
-function getBodyHTMLByCoords(instance, config) {
-  const { startRow, startColumn, endRow, endColumn, rowsLimit, columnsLimit } = config;
+function getBodyHTMLByCoords(instance, copyableRanges, config) {
+  if (copyableRanges.length === 0) {
+    return [];
+  }
+
+  const { columnHeadersCount } = config;
+  const { startRow, startCol, endRow, endCol } = copyableRanges[columnHeadersCount > 0 ? 1 : 0];
   const ignoredRows = new Set(config.ignoredRows);
   const ignoredColumns = new Set(config.ignoredColumns);
+  const cells = [];
+  const data = instance.getData(startRow, startCol, endRow, endCol);
+  const countRows = endRow - startRow + 1;
+  const countColumns = endCol - startCol + 1;
 
-  if (isDefined(startRow)) {
-    const cells = [];
-    const data = instance.getData(startRow, startColumn, endRow, endColumn);
-    const countRows = Math.min(endRow - startRow + 1, rowsLimit);
-    const countColumns = Math.min(endColumn - startColumn + 1, columnsLimit);
+  rangeEach(0, countRows - 1, (rowIndex) => {
+    if (ignoredRows.has(rowIndex)) {
+      return;
+    }
 
-    for (let rowIndex = 0; rowIndex < countRows && ignoredRows.has(rowIndex) === false; rowIndex += 1) {
-      const tr = ['<tr>'];
+    const tr = ['<tr>'];
 
-      if (config.startRowHeader === -1) {
-        tr.push(`<th>${encodeHTMLEntities(instance.getRowHeader(startRow + rowIndex))}</th>`);
+    rangeEach(0, countColumns - 1, (columnIndex) => {
+      if (ignoredColumns.has(columnIndex)) {
+        return;
       }
 
-      for (let columnIndex = 0; columnIndex < countColumns && ignoredColumns.has(columnIndex) === false;
-        columnIndex += 1) {
-        const cellValue = data[rowIndex][columnIndex];
-        const cellValueParsed = isEmpty(cellValue) ? '' : encodeHTMLEntities(cellValue);
-        const { hidden, rowspan, colspan } =
-          instance.getCellMeta(rowIndex + startRow, columnIndex + startColumn);
+      const cellValue = data[rowIndex][columnIndex];
+      const cellValueParsed = isEmpty(cellValue) ? '' : encodeHTMLEntities(cellValue);
+      const { hidden, rowspan, colspan } =
+        instance.getCellMeta(rowIndex + startRow, columnIndex + startCol);
 
-        if (!hidden) {
-          const attrs = [];
+      if (!hidden) {
+        const attrs = [];
 
-          if (rowspan) {
-            const recalculatedRowSpan = Math.min(rowspan, countRows - rowIndex);
+        if (rowspan) {
+          const recalculatedRowSpan = Math.min(rowspan, countRows - rowIndex);
 
-            if (recalculatedRowSpan > 1) {
-              attrs.push(` rowspan="${recalculatedRowSpan}"`);
-            }
+          if (recalculatedRowSpan > 1) {
+            attrs.push(` rowspan="${recalculatedRowSpan}"`);
           }
-
-          if (colspan) {
-            const recalculatedColumnSpan = Math.min(colspan, countColumns - columnIndex);
-
-            if (recalculatedColumnSpan > 1) {
-              attrs.push(` colspan="${recalculatedColumnSpan}"`);
-            }
-          }
-
-          tr.push(`<td${attrs.join('')}>${cellValueParsed}</td>`);
         }
+
+        if (colspan) {
+          const recalculatedColumnSpan = Math.min(colspan, countColumns - columnIndex);
+
+          if (recalculatedColumnSpan > 1) {
+            attrs.push(` colspan="${recalculatedColumnSpan}"`);
+          }
+        }
+
+        tr.push(`<td${attrs.join('')}>${cellValueParsed}</td>`);
       }
+    });
 
-      tr.push('</tr>');
-      cells.push(...tr);
-    }
+    tr.push('</tr>');
+    cells.push(...tr);
+  });
 
-    if (cells.length > 0) {
-      return ['<tbody>', ...cells, '</tbody>'];
-    }
+  if (cells.length > 0) {
+    return ['<tbody>', ...cells, '</tbody>'];
   }
 
   return [];
 }
 
-function getBodyDataByCoords(instance, config) {
-  const { startRow, startColumn, endRow, endColumn, rowsLimit, columnsLimit, startRowHeader } = getConfig(instance, config);
+function getBodyDataByCoords(instance, copyableRanges, config) {
+  const { columnHeadersCount } = config;
+
+  if (copyableRanges.length === 0) {
+    return [];
+  }
+
+  const { startRow, startCol, endRow, endCol } = copyableRanges[columnHeadersCount > 0 ? 1 : 0];
   const ignoredRows = new Set(config.ignoredRows);
   const ignoredColumns = new Set(config.ignoredColumns);
+  const data = instance.getData(startRow, startCol, endRow, endCol);
   const cells = [];
 
-  if (isDefined(startRow)) {
-    const data = instance.getData(startRow, startColumn, endRow, endColumn);
-    const countRows = Math.min(endRow - startRow + 1, rowsLimit);
-    const countColumns = Math.min(endColumn - startColumn + 1, columnsLimit);
-
-    for (let rowIndex = 0; rowIndex < countRows && ignoredRows.has(rowIndex) === false; rowIndex += 1) {
-      const tr = [];
-
-      if (startRowHeader === -1) {
-        tr.push(instance.getRowHeader(startRow + rowIndex));
-      }
-
-      for (let columnIndex = 0; columnIndex < countColumns && ignoredColumns.has(columnIndex) === false;
-        columnIndex += 1) {
-        const cellValue = data[rowIndex][columnIndex];
-        const cellValueParsed = isEmpty(cellValue) ? '' : cellValue;
-
-        tr.push(cellValueParsed);
-      }
-
-      cells.push(tr);
+  rangeEach(0, endRow - startRow, (rowIndex) => {
+    if (ignoredRows.has(rowIndex)) {
+      return;
     }
-  }
+
+    const tr = [];
+
+    rangeEach(0, endCol - startCol, (columnIndex) => {
+      if (ignoredColumns.has(columnIndex)) {
+        return;
+      }
+
+      const cellValue = data[rowIndex][columnIndex];
+      const cellValueParsed = isEmpty(cellValue) ? '' : cellValue;
+
+      tr.push(cellValueParsed);
+    });
+
+    cells.push(tr);
+  });
 
   return cells;
 }

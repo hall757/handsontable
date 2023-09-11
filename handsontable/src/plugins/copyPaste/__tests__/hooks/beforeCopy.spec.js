@@ -192,9 +192,8 @@ describe('CopyPaste', () => {
         data: createSpreadsheetData(2, 2),
         colHeaders: true,
         copyPaste: true,
-        beforeCopy(changes) {
-          changes.splice(2, 1); // remove the first selected cells
-          changes.splice(1, 1); // remove the most-bottom column header
+        beforeCopy(_, __, copyConfig) {
+          copyConfig.ignoredRows.push(-1, 0); // remove the first selected cells and the most-bottom column header
         },
         modifyColumnHeaderValue(value, columnIndex, headerLevel) {
           if (headerLevel < 0) {
@@ -223,14 +222,20 @@ describe('CopyPaste', () => {
       plugin.onCopy(copyEvent); // emulate native "copy" event
 
       expect(copyEvent.clipboardData.getData('text/plain')).toBe('A-0-0\nA2');
+      /* eslint-disable indent */
       expect(copyEvent.clipboardData.getData('text/html')).toBe([
         '<meta name="generator" content="Handsontable"/>' +
-          '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
-        '<table><tbody>',
-        '<tr><td>A-0-0</td></tr>',
-        '<tr><td>A2</td></tr>',
-        '</tbody></table>'
+        '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
+        '<table>',
+          '<thead>',
+            '<tr><th>A-0-0</th></tr>',
+          '</thead>',
+          '<tbody>',
+            '<tr><td>A2</td></tr>',
+          '</tbody>',
+        '</table>'
       ].join(''));
+      /* eslint-enable */
     });
   });
 });

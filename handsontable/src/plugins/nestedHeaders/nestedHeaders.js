@@ -94,7 +94,7 @@ export class NestedHeaders extends BasePlugin {
    * @private
    * @type {GhostTable}
    */
-  // @TODO This should be changed after refactor handsontable/utils/ghostTable.
+    // @TODO This should be changed after refactor handsontable/utils/ghostTable.
   ghostTable = new GhostTable(this.hot, (row, column) => this.getHeaderSettings(row, column));
 
   /**
@@ -434,29 +434,13 @@ export class NestedHeaders extends BasePlugin {
    * @param {{ columnHeadersCount: number }} copiedHeadersCount An object with keys that holds information with
    *                                                            the number of copied headers.
    */
-  onBeforeCopy(data, copyableRanges, config) {
-    const { columnHeadersCount, startColumnHeader, startRow, endRow, startColumn, endColumn } = config;
-
+  onBeforeCopy(data, copyableRanges, { columnHeadersCount }) {
     if (columnHeadersCount === 0) {
       return;
     }
 
-    for (let rowIndex = startColumnHeader; rowIndex < 0; rowIndex += 1) {
-      for (let columnIndex = startColumn; columnIndex <= endColumn; columnIndex += 1) {
-        const rowsCount = endRow - startRow + 1;
-        const zeroBasedColumnHeaderLevel = rowsCount + rowIndex - 1;
-        const zeroBasedColumnIndex = columnIndex - startColumn;
-
-        const isRoot = this.#stateManager.getHeaderTreeNodeData(rowIndex, columnIndex)?.isRoot;
-
-        if (isRoot === false) {
-          data[zeroBasedColumnHeaderLevel][zeroBasedColumnIndex] = '';
-        }
-      }
-    }
-
     for (let rangeIndex = 0; rangeIndex < copyableRanges.length; rangeIndex++) {
-      const { startCol, endCol } = copyableRanges[rangeIndex];
+      const { startRow, startCol, endRow, endCol } = copyableRanges[rangeIndex];
       const rowsCount = endRow - startRow + 1;
       const columnsCount = startCol - endCol + 1;
 

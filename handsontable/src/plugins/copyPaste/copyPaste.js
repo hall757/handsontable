@@ -568,29 +568,41 @@ export class CopyPaste extends BasePlugin {
 
     const copyConfig = {
       ...this.#countCopiedHeaders(this.copyableRanges),
-      withCells: this.#copyMode !== 'column-headers-only',
-      withColumnHeaders: this.#copyMode !== 'cells-only',
-      withRowHeaders: false,
-      onlyFirstLevel: this.#copyMode === 'with-column-headers',
-      rowsLimit: this.rowsLimit,
-      columnsLimit: this.columnsLimit,
-      ignoredRowHeaders: [],
-      ignoredColumnHeaders: [],
       ignoredRows: [],
       ignoredColumns: [],
     };
 
-    const data = selectionToData(this.hot, getConfig(this.hot, copyConfig));
-
-    const allowCopying = !!this.hot.runHooks('beforeCopy', data, this.copyableRanges, getConfig(this.hot, copyConfig));
-    const ignoredRowsSet = new Set(copyConfig.ignoredRows);
-    const modifiedData = data.filter((row, rowIndex) => ignoredRowsSet.has(rowIndex) === false);
+    const data = selectionToData(this.hot, this.copyableRanges, copyConfig);
+    const allowCopying = !!this.hot.runHooks('beforeCopy', data, this.copyableRanges, copyConfig);
 
     if (allowCopying) {
-      const textPlain = stringify(modifiedData);
+      const ignoredRows = new Set(copyConfig.ignoredRows);
+      const ignoredColumns = new Set(copyConfig.ignoredColumns);
+
+      const headers = data.slice(0, copyConfig.columnHeadersCount).reduce((filteredHeaders, rowData, rowIndex) => {
+        if (ignoredRows.has(rowIndex - copyConfig.columnHeadersCount) === false) {
+          const filteredRowData = rowData.filter((_, index) => ignoredColumns.has(index) === false);
+
+          return filteredHeaders.concat([filteredRowData]);
+        }
+
+        return filteredHeaders;
+      }, []);
+
+      const cells = data.slice(copyConfig.columnHeadersCount).reduce((filteredHeaders, rowData, rowIndex) => {
+        if (ignoredRows.has(rowIndex) === false) {
+          const filteredRowData = rowData.filter((_, index) => ignoredColumns.has(index) === false);
+
+          return filteredHeaders.concat([filteredRowData]);
+        }
+
+        return filteredHeaders;
+      }, []);
+
+      const textPlain = stringify([...headers, ...cells]);
 
       if (event && event.clipboardData) {
-        const textHTML = selectionToHTML(this.hot, this.copyableRanges);
+        const textHTML = selectionToHTML(this.hot, this.copyableRanges, copyConfig);
 
         event.clipboardData.setData('text/plain', textPlain);
         event.clipboardData.setData('text/html', [META_HEAD, textHTML].join(''));
@@ -599,7 +611,7 @@ export class CopyPaste extends BasePlugin {
         this.hot.rootWindow.clipboardData.setData('Text', textPlain);
       }
 
-      this.hot.runHooks('afterCopy', modifiedData, this.copyableRanges, copyConfig);
+      this.hot.runHooks('afterCopy', data, this.copyableRanges, copyConfig);
     }
 
     this.#copyMode = 'cells-only';

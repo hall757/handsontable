@@ -252,14 +252,18 @@ describe('CopyPaste', () => {
       plugin.copyColumnHeadersOnly();
       plugin.onCopy(copyEvent); // emulate native "copy" event
 
+      /* eslint-disable indent */
       expect(copyEvent.clipboardData.getData('text/plain')).toBe('A\tB\tC\tD\tE');
       expect(copyEvent.clipboardData.getData('text/html')).toBe([
-        '<meta name="generator" content="Handsontable"/>' +
-          '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
-        '<table><tbody>',
-        '<tr><td>A</td><td>B</td><td>C</td><td>D</td><td>E</td></tr>',
-        '</tbody></table>',
+        '<meta name="generator" content="Handsontable"/>',
+        '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
+        '<table>',
+          '<thead>',
+            '<tr><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th></tr>',
+          '</thead>',
+        '</table>',
       ].join(''));
+      /* eslint-enable */
     });
 
     it('should copy an empty string to the clipboard when all rows are trimmed and the `colHeaders` is disabled', () => {

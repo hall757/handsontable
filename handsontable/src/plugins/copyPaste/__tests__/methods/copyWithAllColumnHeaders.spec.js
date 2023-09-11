@@ -343,18 +343,22 @@ describe('CopyPaste', () => {
       plugin.copyWithAllColumnHeaders();
       plugin.onCopy(copyEvent); // emulate native "copy" event
 
+      /* eslint-disable indent */
       expect(copyEvent.clipboardData.getData('text/plain')).toBe([
         'A-0-0\tB-1-0\tC-2-0\tD-3-0\tE-4-0',
         'A-0-1\tB-1-1\tC-2-1\tD-3-1\tE-4-1',
       ].join('\n'));
       expect(copyEvent.clipboardData.getData('text/html')).toBe([
-        '<meta name="generator" content="Handsontable"/>' +
-          '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
-        '<table><tbody>',
-        '<tr><td>A-0-0</td><td>B-1-0</td><td>C-2-0</td><td>D-3-0</td><td>E-4-0</td></tr>',
-        '<tr><td>A-0-1</td><td>B-1-1</td><td>C-2-1</td><td>D-3-1</td><td>E-4-1</td></tr>',
-        '</tbody></table>',
+        '<meta name="generator" content="Handsontable"/>',
+        '<style type="text/css">td{white-space:normal}br{mso-data-placement:same-cell}</style>',
+        '<table>',
+          '<thead>',
+            '<tr><th>A-0-0</th><th>B-1-0</th><th>C-2-0</th><th>D-3-0</th><th>E-4-0</th></tr>',
+            '<tr><th>A-0-1</th><th>B-1-1</th><th>C-2-1</th><th>D-3-1</th><th>E-4-1</th></tr>',
+          '</thead>',
+        '</table>',
       ].join(''));
+      /* eslint-enable */
     });
 
     it('should copy an empty string to the clipboard when all rows are trimmed and the `colHeaders` is disabled', () => {
