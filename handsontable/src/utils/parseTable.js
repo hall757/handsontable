@@ -26,62 +26,18 @@ function isHTMLTable(element) {
  * @returns {string} OuterHTML of the HTMLTableElement.
  */
 export function instanceToHTML(instance) {
-  const includeRowHeaders = instance.hasRowHeaders();
-  const includeColumnHeaders = instance.hasColHeaders();
-  const startRow = includeColumnHeaders ? -1 : 0;
-  const startColumn = includeRowHeaders ? -1 : 0;
+  const startCol = instance.hasRowHeaders() ? -1 : 0;
   const endRow = instance.countRows() - 1;
-  const endColumn = instance.countCols() - 1;
+  const endCol = instance.countCols() - 1;
+  const coords = [];
 
-  return getTableByCoords(instance, startRow, startColumn, endRow, endColumn, includeRowHeaders, includeColumnHeaders);
-}
-
-export function getConfig(instance, metaInfoAndModifiers) {
-  const { withCells, withColumnHeaders, withRowHeaders, onlyFirstLevel, columnHeadersCount, rowsLimit, columnsLimit,
-    ignoredRows, ignoredColumns } = metaInfoAndModifiers;
-  const selection = instance.getSelectedLast();
-  const [startRow, startColumn, endRow, endColumn] = [
-    Math.min(selection[0], selection[2]),
-    Math.min(selection[1], selection[3]),
-    Math.max(selection[0], selection[2]),
-    Math.max(selection[1], selection[3])
-  ];
-  const config = {
-    ignoredRows,
-    ignoredColumns,
-    startColumn: Math.max(startColumn, 0),
-    endColumn: Math.max(endColumn, 0),
-  };
-
-  if (withColumnHeaders === true && columnHeadersCount > 0) {
-    if (onlyFirstLevel === true) {
-      config.startColumnHeader = -1;
-
-    } else {
-      config.startColumnHeader = -1 * columnHeadersCount;
-    }
+  if (instance.hasColHeaders()) {
+    coords.push({ startRow: -1, startCol, endRow: 0, endCol });
   }
 
-  if (withRowHeaders === true && startRow === -1) {
-    config.startRowHeader = startRow;
-  }
+  coords.push({ startRow: 0, startCol, endRow, endCol });
 
-  if (withCells === false) {
-    return config;
-  }
-
-  if (endRow >= 0) {
-    config.startRow = Math.max(startRow, 0);
-
-    if (rowsLimit !== Infinity) {
-      config.endRow = endRow;
-
-    } else {
-      config.endRow = Math.min(endRow, config.startRow + rowsLimit);
-    }
-  }
-
-  return config;
+  return selectionToHTML(instance, coords, {});
 }
 
 /**
@@ -94,14 +50,13 @@ export function getConfig(instance, metaInfoAndModifiers) {
 export function selectionToHTML(instance, copyableRanges, metaInfoAndModifiers) {
   const data = ['<table>'];
 
-  if (metaInfoAndModifiers.columnHeadersCount !== 0) {
-    data.push(...getHeadersHTMLByCoords(instance, copyableRanges, metaInfoAndModifiers));
-  }
+  data.push(...getHeadersHTMLByCoords(instance, copyableRanges.filter(({ startRow }) => {
+    return startRow < 0;
+  }), metaInfoAndModifiers));
 
-  if (metaInfoAndModifiers.columnHeadersCount === 0 ||
-    (metaInfoAndModifiers.columnHeadersCount > 0 && copyableRanges.length > 1)) {
-    data.push(...getBodyHTMLByCoords(instance, copyableRanges, metaInfoAndModifiers));
-  }
+  data.push(...getBodyHTMLByCoords(instance, copyableRanges.filter(({ startRow }) => {
+    return startRow >= 0;
+  }), metaInfoAndModifiers));
 
   data.push('</table>');
 
@@ -111,14 +66,13 @@ export function selectionToHTML(instance, copyableRanges, metaInfoAndModifiers) 
 export function selectionToData(instance, copyableRanges, metaInfoAndModifiers) {
   const data = [];
 
-  if (metaInfoAndModifiers.columnHeadersCount > 0) {
-    data.push(...getHeadersDataByCoords(instance, copyableRanges, metaInfoAndModifiers));
-  }
+  data.push(...getHeadersDataByCoords(instance, copyableRanges.filter(({ startRow, startCol }) => {
+    return startRow < 0;
+  }), metaInfoAndModifiers));
 
-  if (metaInfoAndModifiers.columnHeadersCount === 0 ||
-    (metaInfoAndModifiers.columnHeadersCount > 0 && copyableRanges.length > 1)) {
-    data.push(...getBodyDataByCoords(instance, copyableRanges, metaInfoAndModifiers));
-  }
+  data.push(...getBodyDataByCoords(instance, copyableRanges.filter(({ startRow, startCol }) => {
+    return startRow >= 0;
+  }), metaInfoAndModifiers));
 
   return data;
 }
@@ -141,41 +95,50 @@ function encodeHTMLEntities(text) {
 }
 
 function getHeadersHTMLByCoords(instance, copyableRanges, config) {
-  const { startRow, startCol, endCol } = copyableRanges[0];
   const ignoredRows = new Set(config.ignoredRows);
   const ignoredColumns = new Set(config.ignoredColumns);
   const headers = [];
 
-  rangeEach(startRow, -1, (rowIndex) => {
-    if (ignoredRows.has(rowIndex)) {
-      return;
-    }
+  copyableRanges.forEach(({ startRow, startCol, endCol }) => {
+    const includeRowHeader = startCol < 0;
 
-    const tr = ['<tr>'];
+    startCol = Math.max(0, startCol);
 
-    for (let columnIndex = startCol; columnIndex <= endCol; columnIndex += 1) {
-      if (ignoredColumns.has(columnIndex) === false) {
-        const header = instance.getCell(rowIndex, columnIndex);
-        const colspan = header?.getAttribute('colspan');
-        let colspanAttribute = '';
-
-        if (colspan) {
-          const parsedColspan = parseInt(colspan, 10);
-
-          colspanAttribute = ` colspan=${parsedColspan}`;
-          columnIndex += parsedColspan - 1;
-        }
-
-        tr.push(`<th${colspanAttribute}>${encodeHTMLEntities(instance.getColHeader(
-          columnIndex, rowIndex))}</th>`);
+    rangeEach(startRow, -1, (rowIndex) => {
+      if (ignoredRows.has(rowIndex)) {
+        return;
       }
-    }
 
-    tr.push('</tr>');
+      const tr = ['<tr>'];
 
-    if (tr.length > 2) {
-      headers.push(...tr);
-    }
+      if (includeRowHeader) {
+        tr.push(`<th>${encodeHTMLEntities(instance.getColHeader(-1, rowIndex))}</th>`);
+      }
+
+      for (let columnIndex = startCol; columnIndex <= endCol; columnIndex += 1) {
+        if (ignoredColumns.has(columnIndex) === false) {
+          const header = instance.getCell(rowIndex, columnIndex);
+          const colspan = header?.getAttribute('colspan');
+          let colspanAttribute = '';
+
+          if (colspan) {
+            const parsedColspan = parseInt(colspan, 10);
+
+            colspanAttribute = ` colspan=${parsedColspan}`;
+            columnIndex += parsedColspan - 1;
+          }
+
+          tr.push(`<th${colspanAttribute}>${encodeHTMLEntities(instance.getColHeader(
+            columnIndex, rowIndex))}</th>`);
+        }
+      }
+
+      tr.push('</tr>');
+
+      if (tr.length > 2) {
+        headers.push(...tr);
+      }
+    });
   });
 
   if (headers.length > 0) {
@@ -186,83 +149,94 @@ function getHeadersHTMLByCoords(instance, copyableRanges, config) {
 }
 
 function getHeadersDataByCoords(instance, copyableRanges, config) {
-  const { startRow, startCol, endCol } = copyableRanges[0];
   const headers = [];
   const ignoredRows = new Set(config.ignoredRows);
+  const ignoredColumns = new Set(config.ignoredColumns);
 
-  rangeEach(startRow, -1, (rowIndex) => {
-    if (ignoredRows.has(rowIndex)) {
-      return;
-    }
+  copyableRanges.forEach(({ startRow, startCol, endCol }) => {
+    rangeEach(startRow, -1, (rowIndex) => {
+      if (ignoredRows.has(rowIndex)) {
+        return;
+      }
 
-    const tr = [];
+      const tr = [];
 
-    rangeEach(startCol, endCol, (columnIndex) => {
-      tr.push(instance.getColHeader(columnIndex, rowIndex));
+      rangeEach(startCol, endCol, (columnIndex) => {
+        if (ignoredColumns.has(columnIndex)) {
+          return;
+        }
+
+        tr.push(instance.getColHeader(columnIndex, rowIndex));
+      });
+
+      headers.push(tr);
     });
-
-    headers.push(tr);
   });
 
   return headers;
 }
 
 function getBodyHTMLByCoords(instance, copyableRanges, config) {
-  if (copyableRanges.length === 0) {
-    return [];
-  }
-
-  const { columnHeadersCount } = config;
-  const { startRow, startCol, endRow, endCol } = copyableRanges[columnHeadersCount > 0 ? 1 : 0];
-  const ignoredRows = new Set(config.ignoredRows);
-  const ignoredColumns = new Set(config.ignoredColumns);
   const cells = [];
-  const data = instance.getData(startRow, startCol, endRow, endCol);
-  const countRows = endRow - startRow + 1;
-  const countColumns = endCol - startCol + 1;
 
-  rangeEach(0, countRows - 1, (rowIndex) => {
-    if (ignoredRows.has(rowIndex)) {
-      return;
-    }
+  copyableRanges.forEach(({ startRow, startCol, endRow, endCol }) => {
+    const ignoredRows = new Set(config.ignoredRows);
+    const ignoredColumns = new Set(config.ignoredColumns);
+    const includeRowHeader = startCol < 0;
 
-    const tr = ['<tr>'];
+    startCol = Math.max(0, startCol);
 
-    rangeEach(0, countColumns - 1, (columnIndex) => {
-      if (ignoredColumns.has(columnIndex)) {
+    const data = instance.getData(startRow, startCol, endRow, endCol);
+    const countRows = endRow - startRow + 1;
+    const countColumns = endCol - startCol + 1;
+
+    rangeEach(0, countRows - 1, (rowIndex) => {
+      if (ignoredRows.has(rowIndex)) {
         return;
       }
 
-      const cellValue = data[rowIndex][columnIndex];
-      const cellValueParsed = isEmpty(cellValue) ? '' : encodeHTMLEntities(cellValue);
-      const { hidden, rowspan, colspan } =
-        instance.getCellMeta(rowIndex + startRow, columnIndex + startCol);
+      const tr = ['<tr>'];
 
-      if (!hidden) {
-        const attrs = [];
-
-        if (rowspan) {
-          const recalculatedRowSpan = Math.min(rowspan, countRows - rowIndex);
-
-          if (recalculatedRowSpan > 1) {
-            attrs.push(` rowspan="${recalculatedRowSpan}"`);
-          }
-        }
-
-        if (colspan) {
-          const recalculatedColumnSpan = Math.min(colspan, countColumns - columnIndex);
-
-          if (recalculatedColumnSpan > 1) {
-            attrs.push(` colspan="${recalculatedColumnSpan}"`);
-          }
-        }
-
-        tr.push(`<td${attrs.join('')}>${cellValueParsed}</td>`);
+      if (includeRowHeader === true) {
+        tr.push(`<th>${encodeHTMLEntities(instance.getRowHeader(rowIndex))}</th>`);
       }
-    });
 
-    tr.push('</tr>');
-    cells.push(...tr);
+      rangeEach(0, countColumns - 1, (columnIndex) => {
+        if (ignoredColumns.has(columnIndex)) {
+          return;
+        }
+
+        const cellValue = data[rowIndex][columnIndex];
+        const cellValueParsed = isEmpty(cellValue) ? '' : encodeHTMLEntities(cellValue);
+        const { hidden, rowspan, colspan } =
+          instance.getCellMeta(rowIndex + startRow, columnIndex + startCol);
+
+        if (!hidden) {
+          const attrs = [];
+
+          if (rowspan) {
+            const recalculatedRowSpan = Math.min(rowspan, countRows - rowIndex);
+
+            if (recalculatedRowSpan > 1) {
+              attrs.push(` rowspan="${recalculatedRowSpan}"`);
+            }
+          }
+
+          if (colspan) {
+            const recalculatedColumnSpan = Math.min(colspan, countColumns - columnIndex);
+
+            if (recalculatedColumnSpan > 1) {
+              attrs.push(` colspan="${recalculatedColumnSpan}"`);
+            }
+          }
+
+          tr.push(`<td${attrs.join('')}>${cellValueParsed}</td>`);
+        }
+      });
+
+      tr.push('</tr>');
+      cells.push(...tr);
+    });
   });
 
   if (cells.length > 0) {
@@ -273,53 +247,36 @@ function getBodyHTMLByCoords(instance, copyableRanges, config) {
 }
 
 function getBodyDataByCoords(instance, copyableRanges, config) {
-  const { columnHeadersCount } = config;
-
-  if (copyableRanges.length === 0) {
-    return [];
-  }
-
-  const { startRow, startCol, endRow, endCol } = copyableRanges[columnHeadersCount > 0 ? 1 : 0];
-  const ignoredRows = new Set(config.ignoredRows);
-  const ignoredColumns = new Set(config.ignoredColumns);
-  const data = instance.getData(startRow, startCol, endRow, endCol);
   const cells = [];
 
-  rangeEach(0, endRow - startRow, (rowIndex) => {
-    if (ignoredRows.has(rowIndex)) {
-      return;
-    }
+  copyableRanges.forEach(({ startRow, startCol, endRow, endCol }) => {
+    const ignoredRows = new Set(config.ignoredRows);
+    const ignoredColumns = new Set(config.ignoredColumns);
+    const data = instance.getData(startRow, startCol, endRow, endCol);
 
-    const tr = [];
-
-    rangeEach(0, endCol - startCol, (columnIndex) => {
-      if (ignoredColumns.has(columnIndex)) {
+    rangeEach(0, endRow - startRow, (rowIndex) => {
+      if (ignoredRows.has(rowIndex)) {
         return;
       }
 
-      const cellValue = data[rowIndex][columnIndex];
-      const cellValueParsed = isEmpty(cellValue) ? '' : cellValue;
+      const tr = [];
 
-      tr.push(cellValueParsed);
+      rangeEach(0, endCol - startCol, (columnIndex) => {
+        if (ignoredColumns.has(columnIndex)) {
+          return;
+        }
+
+        const cellValue = data[rowIndex][columnIndex];
+        const cellValueParsed = isEmpty(cellValue) ? '' : cellValue;
+
+        tr.push(cellValueParsed);
+      });
+
+      cells.push(tr);
     });
-
-    cells.push(tr);
   });
 
   return cells;
-}
-
-/**
- * Creates OuterHTML of the HTMLTableElement from instance of Handsontable basing on handled coordinates.
- *
- * @private
- * @param {Core} instance The Handsontable instance.
- * @param {object} config
- * @returns {string}
- */
-function getTableByCoords(instance, config) {
-  return ['<table>', ...getHeadersHTMLByCoords(instance, config), ...getBodyHTMLByCoords(instance, config),
-    '</table>'].join('');
 }
 
 /**
